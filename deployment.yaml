@@ -1,0 +1,61 @@
+﻿apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webApp
+  labels:
+    app: webApp
+spec:
+  replicas: 3  # Количество подов для обработки стабильной нагрузки. Пояснение в Readme
+  selector:
+    matchLabels:
+      app: webApp
+  template:
+    metadata:
+      labels:
+        app: webApp
+    spec:
+      affinity:
+        # Настройка размещения подов для отказоустойчивости
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - webApp
+              topologyKey: "kubernetes.io/hostname"  # Размещаем поды на разных нодах
+      containers:
+        - name: webApp-container
+          image: webApp:latest  # Укажите образ вашего приложения
+          resources:
+            requests:
+              cpu: "1"          # Запросы ресурсов CPU при инициализации
+              memory: "128Mi"   # Запросы по памяти
+            limits:
+              cpu: "1"          # Лимиты ресурсов CPU (при инициализации)
+              memory: "128Mi"   # Лимиты по памяти
+          readinessProbe:
+            httpGet:
+              path: /health       # Путь для проверки готовности
+              port: 80            # Порт
+            initialDelaySeconds: 10  # Задержка перед первой проверкой
+            periodSeconds: 5          # Периодичность проверки готовности
+            failureThreshold: 3       # Число неудачных проверок перед тем, как считать под недоступным
+          livenessProbe:
+            httpGet:
+              path: /health          # Путь для проверки живости
+              port: 80
+            initialDelaySeconds: 15  # Задержка перед первой проверкой
+            periodSeconds: 10         # Периодичность проверки живости
+
+---
+apiVersion: policy/v1beta1
+kind: PodDisruptionBudget
+metadata:
+  name: webApp-pdb
+spec:
+  minAvailable: 1  # Минимальное количество доступных подов во время обслуживания
+  selector:
+    matchLabels:
+      app: webApp
